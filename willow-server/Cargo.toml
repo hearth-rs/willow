@@ -1,0 +1,9 @@
+[package]
+name = "willow-server"
+version = { workspace = true }
+edition = { workspace = true }
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+slab = "0.4"
+willow-protocol = { workspace = true }

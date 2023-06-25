@@ -1,0 +1,9 @@
+[package]
+name = "willow-protocol"
+version = { workspace = true }
+edition = { workspace = true }
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+glam = { version = "0.24", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }

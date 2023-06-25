@@ -1,0 +1,8 @@
+[package]
+name = "willow-piet"
+version = { workspace = true }
+edition = { workspace = true }
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+willow-server = { workspace = true }
