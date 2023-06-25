@@ -38,6 +38,7 @@ pub enum NodeKind {
     Group(Vec<usize>),
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     kind: NodeKind,
 }
@@ -216,5 +217,36 @@ mod tests {
                 new_nodes: vec![1, 2, 3]
             }
         );
+    }
+
+    #[test]
+    fn keep_group_ids() {
+        let mut tree = Tree::new();
+        let response = tree
+            .update_node(NodeUpdate {
+                target: 0,
+                content: vec![
+                    NewNode::Shape(Shape::Empty),
+                    NewNode::Shape(Shape::Empty),
+                    NewNode::Shape(Shape::Empty),
+                ]
+                .into(),
+            })
+            .unwrap();
+
+        let response = tree
+            .update_node(NodeUpdate {
+                target: 0,
+                content: vec![
+                    ChildUpdate::NewNode(NewNode::Shape(Shape::Circle { radius: 1.0 })),
+                    ChildUpdate::KeepIndex(response.new_nodes[1]),
+                    ChildUpdate::KeepIndex(response.new_nodes[2]),
+                ]
+                .into(),
+            })
+            .unwrap();
+
+        assert_eq!(response.new_nodes, vec![4]);
+        assert_eq!(tree.nodes.get(1), None);
     }
 }
