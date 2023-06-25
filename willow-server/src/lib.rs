@@ -19,12 +19,15 @@ use slab::Slab;
 use willow_protocol::*;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum NodeUpdateError {}
+pub enum NodeUpdateError {
+    /// An update's target node ID was invalid.
+    InvalidTarget(u32),
+}
 
 impl std::fmt::Display for NodeUpdateError {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            _ => panic!("unimplemented update error display"),
+            NodeUpdateError::InvalidTarget(id) => write!(fmt, "invalid update target ID: {}", id),
         }
     }
 }
@@ -76,7 +79,10 @@ impl Tree {
     }
 
     pub fn update_node(&mut self, update: NodeUpdate) -> NodeUpdateResult<NodeUpdateResponse> {
-        let node = self.nodes.get_mut(update.target).unwrap();
+        let node = self
+            .nodes
+            .get_mut(update.target as usize)
+            .ok_or(NodeUpdateError::InvalidTarget(update.target))?;
 
         let original_children: Vec<usize>;
         match node.kind.clone() {
@@ -113,7 +119,7 @@ impl Tree {
             _ => unimplemented!("{:?}", update.content),
         }
 
-        let node = self.nodes.get_mut(update.target).unwrap();
+        let node = self.nodes.get_mut(update.target as usize).unwrap();
         let _ = std::mem::replace(node, new_target);
 
         Ok(NodeUpdateResponse { new_nodes })
