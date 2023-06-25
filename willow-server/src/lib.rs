@@ -127,47 +127,15 @@ impl Tree {
                 new_target = Node::new(NodeKind::Shape(shape));
             }
             NodeContent::Operation { operation, child } => {
-                let child = match child {
-                    ChildUpdate::KeepIndex(idx) => {
-                        let reused = &mut self.nodes.get_mut(idx as usize).unwrap().reused;
-                        if *reused {
-                            return Err(NodeUpdateError::DuplicateKeepIndex(idx));
-                        } else {
-                            *reused = true;
-                            idx as usize
-                        }
-                    }
-                    ChildUpdate::NewNode(new_node) => {
-                        let child_nodes = self.add_new_node(new_node).new_nodes;
-                        let child = *child_nodes.last().unwrap() as usize;
-                        new_nodes.extend_from_slice(&child_nodes);
-                        child
-                    }
-                };
-
+                let child = self.update_child(&mut new_nodes, child)? as usize;
                 let node = NodeKind::Operation { operation, child };
                 new_target = Node::new(node);
             }
             NodeContent::Group { new_children } => {
                 let mut children_idxs = Vec::new();
                 for child in new_children.unwrap_or_default() {
-                    match child {
-                        ChildUpdate::KeepIndex(idx) => {
-                            let reused = &mut self.nodes.get_mut(idx as usize).unwrap().reused;
-                            if *reused {
-                                return Err(NodeUpdateError::DuplicateKeepIndex(idx));
-                            } else {
-                                *reused = true;
-                                children_idxs.push(idx as usize);
-                            }
-                        }
-                        ChildUpdate::NewNode(new_node) => {
-                            let child_nodes = self.add_new_node(new_node).new_nodes;
-                            let child = *child_nodes.last().unwrap() as usize;
-                            children_idxs.push(child);
-                            new_nodes.extend_from_slice(&child_nodes);
-                        }
-                    }
+                    let child = self.update_child(&mut new_nodes, child)?;
+                    children_idxs.push(child as usize);
                 }
 
                 new_target = Node::new(NodeKind::Group(children_idxs));
@@ -188,35 +156,60 @@ impl Tree {
         Ok(NodeUpdateResponse { new_nodes })
     }
 
-    /// Directly adds a new node to the tree.
-    pub fn add_new_node(&mut self, new_node: NewNode) -> NodeUpdateResponse {
-        match new_node {
-            NewNode::Shape(shape) => NodeUpdateResponse {
-                new_nodes: vec![self.nodes.insert(Node::new(NodeKind::Shape(shape))) as u32],
-            },
+    /// Consumes a [ChildUpdate] during a node update.
+    fn update_child(
+        &mut self,
+        new_indices: &mut Vec<u32>,
+        child: ChildUpdate,
+    ) -> NodeUpdateResult<u32> {
+        match child {
+            ChildUpdate::KeepIndex(idx) => {
+                let node = self
+                    .nodes
+                    .get_mut(idx as usize)
+                    .ok_or(NodeUpdateError::InvalidKeepIndex(idx))?;
+
+                if !node.owned {
+                    Err(NodeUpdateError::UnownedKeepIndex(idx))
+                } else if node.reused {
+                    Err(NodeUpdateError::DuplicateKeepIndex(idx))
+                } else {
+                    node.reused = true;
+                    Ok(idx)
+                }
+            }
+            ChildUpdate::NewNode(new_node) => Ok(self.add_new_node(new_indices, new_node)),
+        }
+    }
+
+    /// Directly adds a new node to the tree, writing the allocated ID of the
+    /// node and its children to the given buffer. Returns the ID of the new
+    /// node.
+    pub fn add_new_node(&mut self, new_indices: &mut Vec<u32>, node: NewNode) -> u32 {
+        match node {
+            NewNode::Shape(shape) => {
+                let node = Node::new(NodeKind::Shape(shape));
+                let index = self.nodes.insert(node) as u32;
+                new_indices.push(index);
+                index
+            }
             NewNode::Operation { operation, child } => {
-                let mut new_nodes = self.add_new_node(*child).new_nodes;
-                let child = *new_nodes.last().unwrap() as usize;
+                let child = self.add_new_node(new_indices, *child) as usize;
                 let op_node = Node::new(NodeKind::Operation { operation, child });
-                new_nodes.push(self.nodes.insert(op_node) as u32);
-                NodeUpdateResponse { new_nodes }
+                let index = self.nodes.insert(op_node) as u32;
+                new_indices.push(index);
+                index
             }
             NewNode::Group { children } => {
-                let new_nodes: Vec<Vec<u32>> = children
+                let children: Vec<usize> = children
                     .into_iter()
-                    .map(|child| self.add_new_node(child).new_nodes)
-                    .collect();
-
-                let children: Vec<usize> = new_nodes
-                    .iter()
-                    .map(|nodes| *nodes.last().unwrap() as usize)
+                    .map(|child| self.add_new_node(new_indices, child) as usize)
                     .collect();
 
                 let group_node = Node::new(NodeKind::Group(children));
-                let mut new_nodes: Vec<u32> = new_nodes.into_iter().flatten().collect();
-                new_nodes.push(self.nodes.insert(group_node) as u32);
-
-                NodeUpdateResponse { new_nodes }
+                let index = self.nodes.insert(group_node) as u32;
+                new_indices.push(index);
+                index
             }
         }
     }
