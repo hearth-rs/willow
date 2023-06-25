@@ -34,7 +34,7 @@ pub type NodeUpdateResult<T> = Result<T, NodeUpdateError>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeKind {
     Shape(Shape),
-    Operation { inner: Operation, child: usize },
+    Operation { operation: Operation, child: usize },
     Group(Vec<usize>),
 }
 
@@ -85,17 +85,70 @@ impl Tree {
             _ => unimplemented!("{:?}", node.kind),
         }
 
-        let new_node: Node;
+        drop(node);
+
+        let new_target: Node;
+        let mut new_nodes = Vec::new();
         match update.content {
             NodeContent::Shape(shape) => {
-                new_node = Node::new(NodeKind::Shape(shape));
+                new_target = Node::new(NodeKind::Shape(shape));
+            }
+            NodeContent::Group { new_children } => {
+                let mut children_ids = Vec::new();
+                for child in new_children.unwrap_or_default() {
+                    match child {
+                        ChildUpdate::KeepIndex(_) => unimplemented!("group node re-use"),
+                        ChildUpdate::NewNode(new_node) => {
+                            let child_nodes = self.add_new_node(new_node).new_nodes;
+                            let child = *child_nodes.last().unwrap() as usize;
+                            children_ids.push(child);
+                            new_nodes.extend_from_slice(&child_nodes);
+                        }
+                    }
+                }
+
+                new_target = Node::new(NodeKind::Group(children_ids));
             }
             _ => unimplemented!("{:?}", update.content),
         }
 
-        let _ = std::mem::replace(node, new_node);
+        let node = self.nodes.get_mut(update.target).unwrap();
+        let _ = std::mem::replace(node, new_target);
 
-        Ok(NodeUpdateResponse { new_nodes: vec![] })
+        Ok(NodeUpdateResponse { new_nodes })
+    }
+
+    /// Directly adds a new node to the tree.
+    pub fn add_new_node(&mut self, new_node: NewNode) -> NodeUpdateResponse {
+        match new_node {
+            NewNode::Shape(shape) => NodeUpdateResponse {
+                new_nodes: vec![self.nodes.insert(Node::new(NodeKind::Shape(shape))) as u32],
+            },
+            NewNode::Operation { operation, child } => {
+                let mut new_nodes = self.add_new_node(*child).new_nodes;
+                let child = *new_nodes.last().unwrap() as usize;
+                let op_node = Node::new(NodeKind::Operation { operation, child });
+                new_nodes.push(self.nodes.insert(op_node) as u32);
+                NodeUpdateResponse { new_nodes }
+            }
+            NewNode::Group { children } => {
+                let new_nodes: Vec<Vec<u32>> = children
+                    .into_iter()
+                    .map(|child| self.add_new_node(child).new_nodes)
+                    .collect();
+
+                let children: Vec<usize> = new_nodes
+                    .iter()
+                    .map(|nodes| *nodes.last().unwrap() as usize)
+                    .collect();
+
+                let group_node = Node::new(NodeKind::Group(children));
+                let mut new_nodes: Vec<u32> = new_nodes.into_iter().flatten().collect();
+                new_nodes.push(self.nodes.insert(group_node) as u32);
+
+                NodeUpdateResponse { new_nodes }
+            }
+        }
     }
 }
 
@@ -111,6 +164,14 @@ mod tests {
     }
 
     #[test]
+    fn invalid_update_target() {
+        let mut tree = Tree::new();
+        let content = NodeContent::Shape(Shape::Empty);
+        let update = NodeUpdate { target: 1, content };
+        assert!(tree.update_node(update).is_err());
+    }
+
+    #[test]
     fn update_root_shape() {
         let mut tree = Tree::new();
         let shape = Shape::Circle { radius: 1.0 };
@@ -122,23 +183,38 @@ mod tests {
     }
 
     #[test]
-    fn invalid_update_target() {
-        let mut tree = Tree::new();
-        let content = NodeContent::Shape(Shape::Empty);
-        let update = NodeUpdate { target: 1, content };
-        assert!(tree.update_node(update).is_err());
-    }
-
-    #[test]
     fn update_root_operation() {
         let mut tree = Tree::new();
         tree.update_node(NodeUpdate {
             target: 0,
             content: NodeContent::Operation {
                 operation: Operation::Translate { offset: Vec2::ONE },
-                child: ChildUpdate::NewNode(NewNode::Shape(Shape::Circle { radius: 1.0 })),
+                child: NewNode::Shape(Shape::Circle { radius: 1.0 }).into(),
             },
         })
         .unwrap();
+    }
+
+    #[test]
+    fn update_root_group() {
+        let mut tree = Tree::new();
+        let response = tree
+            .update_node(NodeUpdate {
+                target: 0,
+                content: vec![
+                    NewNode::Shape(Shape::Empty),
+                    NewNode::Shape(Shape::Empty),
+                    NewNode::Shape(Shape::Empty),
+                ]
+                .into(),
+            })
+            .unwrap();
+
+        assert_eq!(
+            response,
+            NodeUpdateResponse {
+                new_nodes: vec![1, 2, 3]
+            }
+        );
     }
 }
