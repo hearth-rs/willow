@@ -20,14 +20,25 @@ use willow_protocol::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeUpdateError {
-    /// This update's target node ID was invalid.
+    /// This update's target node index was invalid.
     InvalidTarget,
+
+    /// A [ChildUpdate::KeepIndex] contained an invalid node index.
+    InvalidKeepIndex(u32),
+
+    /// A [ChildUpdate::KeepIndex] contained a node index not owned by the target.
+    UnownedKeepIndex(u32),
 }
 
 impl std::fmt::Display for NodeUpdateError {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
+        use NodeUpdateError::*;
         match self {
-            NodeUpdateError::InvalidTarget => write!(fmt, "invalid update target ID"),
+            InvalidTarget => write!(fmt, "invalid update target index"),
+            InvalidKeepIndex(idx) => write!(fmt, "invalid ChildUpdate::KeepIndex: {}", idx),
+            UnownedKeepIndex(idx) => {
+                write!(fmt, "kept index is unowned by the update target: {}", idx)
+            }
         }
     }
 }
@@ -115,20 +126,20 @@ impl Tree {
                 new_target = Node::new(node);
             }
             NodeContent::Group { new_children } => {
-                let mut children_ids = Vec::new();
+                let mut children_idxs = Vec::new();
                 for child in new_children.unwrap_or_default() {
                     match child {
                         ChildUpdate::KeepIndex(_) => unimplemented!("group node re-use"),
                         ChildUpdate::NewNode(new_node) => {
                             let child_nodes = self.add_new_node(new_node).new_nodes;
                             let child = *child_nodes.last().unwrap() as usize;
-                            children_ids.push(child);
+                            children_idxs.push(child);
                             new_nodes.extend_from_slice(&child_nodes);
                         }
                     }
                 }
 
-                new_target = Node::new(NodeKind::Group(children_ids));
+                new_target = Node::new(NodeKind::Group(children_idxs));
             }
         }
 
@@ -239,7 +250,7 @@ mod tests {
     }
 
     #[test]
-    fn keep_group_ids() {
+    fn keep_group_index() {
         let mut tree = Tree::new();
         let response = tree
             .update_node(NodeUpdate {
@@ -267,5 +278,37 @@ mod tests {
 
         assert_eq!(response.new_nodes, vec![4]);
         assert_eq!(tree.nodes.get(1), None);
+    }
+
+    #[test]
+    fn invalid_keep_index() {
+        let mut tree = Tree::new();
+        let new_nodes = tree
+            .update_node(NodeUpdate {
+                target: 0,
+                content: vec![NewNode::Shape(Shape::Empty)].into(),
+            })
+            .unwrap()
+            .new_nodes;
+
+        assert_eq!(new_nodes, vec![1]);
+
+        let result = tree.update_node(NodeUpdate {
+            target: 0,
+            content: vec![ChildUpdate::KeepIndex(2)].into(),
+        });
+
+        assert_eq!(result, Err(NodeUpdateError::InvalidKeepIndex(2)));
+    }
+
+    #[test]
+    fn self_keep_index() {
+        let mut tree = Tree::new();
+        let result = tree.update_node(NodeUpdate {
+            target: 0,
+            content: vec![ChildUpdate::KeepIndex(0)].into(),
+        });
+
+        assert_eq!(result, Err(NodeUpdateError::UnownedKeepIndex(0)));
     }
 }
