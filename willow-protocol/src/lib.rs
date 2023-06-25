@@ -23,7 +23,7 @@ pub use glam;
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TreeUpdate {
     /// The ID of the targeted tree.
-    pub target: usize,
+    pub target: u32,
 
     /// A list of node updates to apply to the tree.
     pub updates: Vec<NodeUpdate>,
@@ -33,7 +33,7 @@ pub struct TreeUpdate {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NodeUpdate {
     /// The targeted node's index.
-    pub target: usize,
+    pub target: u32,
 
     /// The content of the update.
     pub content: NodeContent,
