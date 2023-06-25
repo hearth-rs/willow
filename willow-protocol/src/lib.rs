@@ -60,6 +60,17 @@ pub enum NodeContent {
     },
 }
 
+impl<T> From<Vec<T>> for NodeContent
+where
+    T: Into<ChildUpdate>,
+{
+    fn from(children: Vec<T>) -> Self {
+        NodeContent::Group {
+            new_children: Some(children.into_iter().map(Into::into).collect()),
+        }
+    }
+}
+
 /// Each group update's child.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ChildUpdate {
@@ -71,7 +82,13 @@ pub enum ChildUpdate {
     NewNode(NewNode),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+impl From<NewNode> for ChildUpdate {
+    fn from(new_node: NewNode) -> Self {
+        ChildUpdate::NewNode(new_node)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct NodeUpdateResponse {
     pub new_nodes: Vec<u32>,
 }
