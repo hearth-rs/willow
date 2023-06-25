@@ -20,14 +20,14 @@ use willow_protocol::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeUpdateError {
-    /// An update's target node ID was invalid.
-    InvalidTarget(u32),
+    /// This update's target node ID was invalid.
+    InvalidTarget,
 }
 
 impl std::fmt::Display for NodeUpdateError {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NodeUpdateError::InvalidTarget(id) => write!(fmt, "invalid update target ID: {}", id),
+            NodeUpdateError::InvalidTarget => write!(fmt, "invalid update target ID"),
         }
     }
 }
@@ -82,7 +82,7 @@ impl Tree {
         let node = self
             .nodes
             .get_mut(update.target as usize)
-            .ok_or(NodeUpdateError::InvalidTarget(update.target))?;
+            .ok_or(NodeUpdateError::InvalidTarget)?;
 
         let original_children: Vec<usize>;
         match node.kind.clone() {
