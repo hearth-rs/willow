@@ -28,6 +28,9 @@ pub enum NodeUpdateError {
 
     /// A [ChildUpdate::KeepIndex] contained a node index not owned by the target.
     UnownedKeepIndex(u32),
+
+    /// Two instances of [ChildUpdate::KeepIndex] refer to the same index.
+    DuplicateKeepIndex(u32),
 }
 
 impl std::fmt::Display for NodeUpdateError {
@@ -35,10 +38,9 @@ impl std::fmt::Display for NodeUpdateError {
         use NodeUpdateError::*;
         match self {
             InvalidTarget => write!(fmt, "invalid update target index"),
-            InvalidKeepIndex(idx) => write!(fmt, "invalid ChildUpdate::KeepIndex: {}", idx),
-            UnownedKeepIndex(idx) => {
-                write!(fmt, "kept index is unowned by the update target: {}", idx)
-            }
+            InvalidKeepIndex(idx) => write!(fmt, "invalid kept index: {}", idx),
+            UnownedKeepIndex(idx) => write!(fmt, "unowned kept index: {}", idx),
+            DuplicateKeepIndex(idx) => write!(fmt, "attempt to keep an index twice: {}", idx),
         }
     }
 }
@@ -55,11 +57,22 @@ pub enum NodeKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     kind: NodeKind,
+
+    /// Whether this value is marked as originally belonging to the target node
+    /// during an update.
+    owned: bool,
+
+    /// Whether this value has been reused by the target node during an update.
+    reused: bool,
 }
 
 impl Node {
     pub fn new(kind: NodeKind) -> Self {
-        Self { kind }
+        Self {
+            kind,
+            owned: false,
+            reused: false,
+        }
     }
 
     pub fn get_kind(&self) -> &NodeKind {
@@ -95,15 +108,17 @@ impl Tree {
             .get_mut(update.target as usize)
             .ok_or(NodeUpdateError::InvalidTarget)?;
 
-        let original_children: Vec<usize>;
-        match node.kind.clone() {
-            NodeKind::Shape(_shape) => {
-                original_children = Vec::new();
-            }
-            _ => unimplemented!("{:?}", node.kind),
-        }
+        let original_children = match node.kind.clone() {
+            NodeKind::Shape(_shape) => Vec::new(),
+            NodeKind::Operation { child, .. } => vec![child],
+            NodeKind::Group(children) => children,
+        };
 
         drop(node);
+
+        for child in original_children.iter() {
+            self.nodes.get_mut(*child).unwrap().owned = true;
+        }
 
         let new_target: Node;
         let mut new_nodes = Vec::new();
@@ -113,7 +128,15 @@ impl Tree {
             }
             NodeContent::Operation { operation, child } => {
                 let child = match child {
-                    ChildUpdate::KeepIndex(_) => unimplemented!("operation child re-use"),
+                    ChildUpdate::KeepIndex(idx) => {
+                        let reused = &mut self.nodes.get_mut(idx as usize).unwrap().reused;
+                        if *reused {
+                            return Err(NodeUpdateError::DuplicateKeepIndex(idx));
+                        } else {
+                            *reused = true;
+                            idx as usize
+                        }
+                    }
                     ChildUpdate::NewNode(new_node) => {
                         let child_nodes = self.add_new_node(new_node).new_nodes;
                         let child = *child_nodes.last().unwrap() as usize;
@@ -129,7 +152,15 @@ impl Tree {
                 let mut children_idxs = Vec::new();
                 for child in new_children.unwrap_or_default() {
                     match child {
-                        ChildUpdate::KeepIndex(_) => unimplemented!("group node re-use"),
+                        ChildUpdate::KeepIndex(idx) => {
+                            let reused = &mut self.nodes.get_mut(idx as usize).unwrap().reused;
+                            if *reused {
+                                return Err(NodeUpdateError::DuplicateKeepIndex(idx));
+                            } else {
+                                *reused = true;
+                                children_idxs.push(idx as usize);
+                            }
+                        }
                         ChildUpdate::NewNode(new_node) => {
                             let child_nodes = self.add_new_node(new_node).new_nodes;
                             let child = *child_nodes.last().unwrap() as usize;
@@ -141,6 +172,14 @@ impl Tree {
 
                 new_target = Node::new(NodeKind::Group(children_idxs));
             }
+        }
+
+        for child in original_children {
+            if self.nodes.get(child).unwrap().reused {
+                continue;
+            }
+
+            self.nodes.remove(child);
         }
 
         let node = self.nodes.get_mut(update.target as usize).unwrap();
