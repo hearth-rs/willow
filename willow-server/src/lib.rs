@@ -100,6 +100,20 @@ impl Tree {
             NodeContent::Shape(shape) => {
                 new_target = Node::new(NodeKind::Shape(shape));
             }
+            NodeContent::Operation { operation, child } => {
+                let child = match child {
+                    ChildUpdate::KeepIndex(_) => unimplemented!("operation child re-use"),
+                    ChildUpdate::NewNode(new_node) => {
+                        let child_nodes = self.add_new_node(new_node).new_nodes;
+                        let child = *child_nodes.last().unwrap() as usize;
+                        new_nodes.extend_from_slice(&child_nodes);
+                        child
+                    }
+                };
+
+                let node = NodeKind::Operation { operation, child };
+                new_target = Node::new(node);
+            }
             NodeContent::Group { new_children } => {
                 let mut children_ids = Vec::new();
                 for child in new_children.unwrap_or_default() {
@@ -116,7 +130,6 @@ impl Tree {
 
                 new_target = Node::new(NodeKind::Group(children_ids));
             }
-            _ => unimplemented!("{:?}", update.content),
         }
 
         let node = self.nodes.get_mut(update.target as usize).unwrap();
