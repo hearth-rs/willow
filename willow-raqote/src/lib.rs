@@ -12,3 +12,56 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
+
+use std::f32::consts::TAU;
+
+use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource};
+use willow_server::{Operation, Shape, WalkTree};
+
+pub struct RaqoteRenderer<'a, Backing> {
+    dt: &'a mut DrawTarget<Backing>,
+}
+
+impl<'a, Backing> WalkTree for RaqoteRenderer<'a, Backing>
+where
+    Backing: AsRef<[u32]> + AsMut<[u32]>,
+{
+    fn on_shape(&mut self, shape: &Shape) {
+        let source = raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(
+            0xff, 0xff, 0x00, 0xff,
+        ));
+
+        let options = DrawOptions::new();
+
+        use Shape::*;
+        match shape {
+            Empty => {}
+            Circle { radius } => {
+                let mut pb = PathBuilder::new();
+                pb.arc(0., 0., *radius, 0., TAU);
+                pb.close();
+
+                let path = pb.finish();
+
+                self.dt.fill(&path, &source, &options);
+            }
+            Rectangle { min, max } => {
+                let size = *max - *min;
+                self.dt
+                    .fill_rect(min.x, min.y, size.x, size.y, &source, &options);
+            }
+        }
+    }
+
+    fn push_operation(&mut self, operation: &Operation) {
+        todo!()
+    }
+
+    fn pop_operation(&mut self, operation: &Operation) {}
+}
+
+impl<'a, Backing> RaqoteRenderer<'a, Backing> {
+    pub fn new(dt: &'a mut DrawTarget<Backing>) -> Self {
+        Self { dt }
+    }
+}
