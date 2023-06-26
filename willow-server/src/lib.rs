@@ -346,4 +346,27 @@ mod tests {
 
         assert_eq!(result, Err(NodeUpdateError::UnownedKeepIndex(0)));
     }
+
+    #[test]
+    fn failed_update_unsets_node_flags() {
+        let mut tree = Tree::new();
+
+        let new_nodes = tree
+            .update_node(NodeUpdate {
+                target: 0,
+                content: vec![NewNode::Shape(Shape::Empty)].into(),
+            })
+            .unwrap()
+            .new_nodes;
+
+        assert_eq!(new_nodes, vec![1]);
+
+        tree.update_node(NodeUpdate {
+            target: 0,
+            content: vec![ChildUpdate::KeepIndex(2)].into(),
+        })
+        .unwrap_err();
+
+        assert!(!tree.nodes[new_nodes[0] as usize].owned);
+    }
 }
