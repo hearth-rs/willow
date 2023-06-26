@@ -143,7 +143,10 @@ impl Tree {
         }
 
         for child in original_children {
-            if self.nodes.get(child).unwrap().reused {
+            let node = self.nodes.get_mut(child).unwrap();
+            if node.reused {
+                node.owned = false;
+                node.reused = false;
                 continue;
             }
 
