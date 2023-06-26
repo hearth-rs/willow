@@ -11,6 +11,7 @@ edition = "2021"
 license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
+raqote = { version = "0.8.2", default-features = false }
 willow-protocol = { path = "willow-protocol" }
 willow-raqote = { path = "willow-raqote" }
 willow-server = { path = "willow-server" }
