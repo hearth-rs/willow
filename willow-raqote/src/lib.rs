@@ -15,11 +15,14 @@
 
 use std::f32::consts::TAU;
 
-use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource};
+use euclid::Angle;
+use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source, Transform};
 use willow_server::{Operation, Shape, WalkTree};
 
 pub struct RaqoteRenderer<'a, Backing> {
     dt: &'a mut DrawTarget<Backing>,
+    stroke_stack: Vec<Source<'static>>,
+    transform_stack: Vec<Transform>,
 }
 
 impl<'a, Backing> WalkTree for RaqoteRenderer<'a, Backing>
@@ -27,11 +30,11 @@ where
     Backing: AsRef<[u32]> + AsMut<[u32]>,
 {
     fn on_shape(&mut self, shape: &Shape) {
-        let source = raqote::Source::Solid(SolidSource::from_unpremultiplied_argb(
-            0xff, 0xff, 0x00, 0xff,
-        ));
-
+        let source = self.stroke_stack.last().unwrap();
         let options = DrawOptions::new();
+
+        let current_transform = self.transform_stack.last().unwrap().clone();
+        self.dt.set_transform(&current_transform);
 
         use Shape::*;
         match shape {
@@ -54,14 +57,65 @@ where
     }
 
     fn push_operation(&mut self, operation: &Operation) {
-        todo!()
+        let current_transform = self.transform_stack.last().unwrap().clone();
+
+        use Operation::*;
+        match operation {
+            Stroke(stroke) => match stroke {
+                willow_server::Stroke::Solid { color } => {
+                    let color = (*color * 255.0).as_uvec3();
+                    let (r, g, b) = (color.x as u8, color.y as u8, color.z as u8);
+                    let a = 255;
+                    let source = SolidSource { r, g, b, a };
+                    self.stroke_stack.push(Source::Solid(source));
+                }
+            },
+            Translate { offset } => {
+                let translate = Transform::translation(offset.x, offset.y);
+                self.transform_stack.push(translate);
+            }
+            Rotation { angle } => {
+                let rotation = Transform::rotation(Angle { radians: *angle });
+                self.transform_stack.push(current_transform.then(&rotation));
+            }
+            Scale { scale } => {
+                let scale = Transform::scale(*scale, *scale);
+                self.transform_stack.push(current_transform.then(&scale));
+            }
+            Opacity { opacity } => self
+                .dt
+                .push_layer_with_blend(*opacity, raqote::BlendMode::Src),
+        }
     }
 
-    fn pop_operation(&mut self, operation: &Operation) {}
+    fn pop_operation(&mut self, operation: &Operation) {
+        use Operation::*;
+
+        match operation {
+            Stroke(_) => {
+                self.stroke_stack.pop();
+            }
+            Translate { .. } | Rotation { .. } | Scale { .. } => {
+                self.transform_stack.pop();
+            }
+            Opacity { .. } => self.dt.pop_layer(),
+        }
+    }
 }
 
 impl<'a, Backing> RaqoteRenderer<'a, Backing> {
     pub fn new(dt: &'a mut DrawTarget<Backing>) -> Self {
-        Self { dt }
+        let default_stroke = Source::Solid(SolidSource {
+            r: 0xff,
+            g: 0x00,
+            b: 0xff,
+            a: 0xff,
+        });
+
+        Self {
+            dt,
+            stroke_stack: vec![default_stroke],
+            transform_stack: vec![Transform::identity()],
+        }
     }
 }
