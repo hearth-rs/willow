@@ -80,7 +80,7 @@ impl Node {
     }
 }
 
-/// A Willow UI tree.
+/// A Willow shape tree.
 pub struct Tree {
     nodes: Slab<Node>,
 }

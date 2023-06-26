@@ -18,8 +18,8 @@ use serde::{Deserialize, Serialize};
 
 pub use glam;
 
-/// A message sent to the UI server to update a UI tree. The server responds
-// with a [NodeUpdateResponse] message for each updated node.
+/// A message sent to the Willow server to update a shape tree. The server
+/// responds with a [NodeUpdateResponse] message for each updated node.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TreeUpdate {
     /// The ID of the targeted tree.
@@ -109,7 +109,7 @@ pub enum NewNode {
     Group { children: Vec<NewNode> },
 }
 
-/// A UI tree node with zero children that draws original content.
+/// A shape tree node with zero children that draws original content.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum Shape {
     /// The non-shape. Draws nothing.
@@ -122,7 +122,7 @@ pub enum Shape {
     Rectangle { min: Vec2, max: Vec2 },
 }
 
-/// A UI tree node with one child that applies a graphical operation to that
+/// A shape tree node with one child that applies a graphical operation to that
 /// child.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum Operation {

@@ -5,4 +5,5 @@ edition = { workspace = true }
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+raqote = "0.8.2"
 willow-server = { workspace = true }
