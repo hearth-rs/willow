@@ -1,7 +1,8 @@
 use std::num::NonZeroU32;
 
+use glam::{Vec2, Vec3A};
 use raqote::DrawTarget;
-use willow_server::Tree;
+use willow_server::*;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -15,9 +16,20 @@ fn main() {
     let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
 
     let mut tree = Tree::new();
-    tree.update_node(willow_server::NodeUpdate {
+    tree.update_node(NodeUpdate {
         target: 0,
-        content: willow_server::NodeContent::Shape(willow_server::Shape::Circle { radius: 250.0 }),
+        content: NodeContent::Operation {
+            operation: Operation::Stroke(Stroke::Solid {
+                color: Vec3A::new(0.0, 0.0, 1.0),
+            }),
+            child: NewNode::Operation {
+                operation: Operation::Translate {
+                    offset: Vec2::new(60.0, 40.0),
+                },
+                child: NewNode::Shape(Shape::Circle { radius: 25.0 }).into(),
+            }
+            .into(),
+        },
     })
     .unwrap();
 
