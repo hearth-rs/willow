@@ -103,33 +103,24 @@ impl Tree {
     }
 
     pub fn update_node(&mut self, update: NodeUpdate) -> NodeUpdateResult<NodeUpdateResponse> {
-        let node = self
-            .nodes
-            .get_mut(update.target as usize)
-            .ok_or(NodeUpdateError::InvalidTarget)?;
+        let original_children = self.begin_children_update(update.target as usize)?;
+        let update_result = self.update_node_inner(update);
+        let remove_unused = !update_result.is_err();
+        self.end_children_update(original_children, remove_unused); // always clean up update
+        update_result
+    }
 
-        let original_children = match node.kind.clone() {
-            NodeKind::Shape(_shape) => Vec::new(),
-            NodeKind::Operation { child, .. } => vec![child],
-            NodeKind::Group(children) => children,
-        };
-
-        drop(node);
-
-        for child in original_children.iter() {
-            self.nodes.get_mut(*child).unwrap().owned = true;
-        }
-
-        let new_target: Node;
+    /// Updates a [Node].
+    ///
+    /// Requires an update to be a progress using [Self::begin_children_update].
+    fn update_node_inner(&mut self, update: NodeUpdate) -> NodeUpdateResult<NodeUpdateResponse> {
         let mut new_nodes = Vec::new();
-        match update.content {
-            NodeContent::Shape(shape) => {
-                new_target = Node::new(NodeKind::Shape(shape));
-            }
+
+        let node_kind = match update.content {
+            NodeContent::Shape(shape) => NodeKind::Shape(shape),
             NodeContent::Operation { operation, child } => {
                 let child = self.update_child(&mut new_nodes, child)? as usize;
-                let node = NodeKind::Operation { operation, child };
-                new_target = Node::new(node);
+                NodeKind::Operation { operation, child }
             }
             NodeContent::Group { new_children } => {
                 let mut children_idxs = Vec::new();
@@ -138,25 +129,55 @@ impl Tree {
                     children_idxs.push(child as usize);
                 }
 
-                new_target = Node::new(NodeKind::Group(children_idxs));
+                NodeKind::Group(children_idxs)
             }
+        };
+
+        let node = self.nodes.get_mut(update.target as usize).unwrap();
+        let _ = std::mem::replace(node, Node::new(node_kind));
+
+        Ok(NodeUpdateResponse { new_nodes })
+    }
+
+    /// Retrieves the children of a node, sets their update flags, and returns
+    /// their indices.
+    fn begin_children_update(&mut self, parent: usize) -> NodeUpdateResult<Vec<usize>> {
+        let node = self
+            .nodes
+            .get_mut(parent)
+            .ok_or(NodeUpdateError::InvalidTarget)?;
+
+        let children = match node.kind.clone() {
+            NodeKind::Shape(_shape) => Vec::new(),
+            NodeKind::Operation { child, .. } => vec![child],
+            NodeKind::Group(children) => children,
+        };
+
+        drop(node);
+
+        for child in children.iter() {
+            self.nodes.get_mut(*child).unwrap().owned = true;
         }
 
-        for child in original_children {
+        Ok(children)
+    }
+
+    /// Unsets the update flags of a node's children and optionally frees
+    /// unused children.
+    fn end_children_update(&mut self, children: Vec<usize>, remove_unused: bool) {
+        for child in children {
             let node = self.nodes.get_mut(child).unwrap();
+            node.owned = false;
+
             if node.reused {
-                node.owned = false;
                 node.reused = false;
                 continue;
             }
 
-            self.nodes.remove(child);
+            if remove_unused {
+                self.nodes.remove(child);
+            }
         }
-
-        let node = self.nodes.get_mut(update.target as usize).unwrap();
-        let _ = std::mem::replace(node, new_target);
-
-        Ok(NodeUpdateResponse { new_nodes })
     }
 
     /// Consumes a [ChildUpdate] during a node update.
@@ -367,6 +388,6 @@ mod tests {
         })
         .unwrap_err();
 
-        assert!(!tree.nodes[new_nodes[0] as usize].owned);
+        assert!(!tree.nodes[1].owned);
     }
 }
