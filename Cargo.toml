@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "willow-desktop",
   "willow-protocol",
   "willow-raqote",
   "willow-server",
