@@ -1,7 +1,8 @@
 [workspace]
 members = [
-  "willow-piet",
+  "willow-desktop",
   "willow-protocol",
+  "willow-raqote",
   "willow-server",
 ]
 
@@ -11,6 +12,7 @@ edition = "2021"
 license = "AGPL-3.0-or-later"
 
 [workspace.dependencies]
-willow-piet = { path = "willow-piet " }
+raqote = { version = "0.8.2", default-features = false }
 willow-protocol = { path = "willow-protocol" }
+willow-raqote = { path = "willow-raqote" }
 willow-server = { path = "willow-server" }

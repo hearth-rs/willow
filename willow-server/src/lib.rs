@@ -16,7 +16,8 @@
 use std::fmt::Formatter;
 
 use slab::Slab;
-use willow_protocol::*;
+
+pub use willow_protocol::*;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum NodeUpdateError {
@@ -80,7 +81,7 @@ impl Node {
     }
 }
 
-/// A Willow UI tree.
+/// A Willow shape tree.
 pub struct Tree {
     nodes: Slab<Node>,
 }
@@ -237,6 +238,42 @@ impl Tree {
             }
         }
     }
+
+    /// Walks the entire tree using a type implementing [WalkTree].
+    pub fn walk(&mut self, walker: &mut impl WalkTree) {
+        let mut stack = Vec::new();
+        stack.push((0, false));
+
+        while let Some((index, pop)) = stack.pop() {
+            match &self.nodes.get(index).unwrap().kind {
+                NodeKind::Shape(shape) => walker.on_shape(shape),
+                NodeKind::Operation { operation, child } => {
+                    if pop {
+                        walker.pop_operation(operation);
+                    } else {
+                        walker.push_operation(operation);
+                        stack.push((index, true));
+                        stack.push((*child, false));
+                    }
+                }
+                NodeKind::Group(children) => stack.extend_from_slice(
+                    children
+                        .iter()
+                        .map(|child| (*child, false))
+                        .collect::<Vec<_>>()
+                        .as_slice(),
+                ),
+            }
+        }
+    }
+}
+
+pub trait WalkTree {
+    fn on_shape(&mut self, shape: &Shape);
+
+    fn push_operation(&mut self, operation: &Operation);
+
+    fn pop_operation(&mut self, operation: &Operation);
 }
 
 #[cfg(test)]

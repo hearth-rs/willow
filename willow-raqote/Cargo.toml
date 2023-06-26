@@ -1,8 +1,10 @@
 [package]
-name = "willow-piet"
+name = "willow-raqote"
 version = { workspace = true }
 edition = { workspace = true }
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+euclid = "0.22"
+raqote = { workspace = true }
 willow-server = { workspace = true }
