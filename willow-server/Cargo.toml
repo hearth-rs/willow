@@ -5,5 +5,5 @@ edition = { workspace = true }
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-slab = "0.4"
+slab = { workspace = true }
 willow-protocol = { workspace = true }
