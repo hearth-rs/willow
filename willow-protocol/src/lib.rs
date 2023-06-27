@@ -71,6 +71,21 @@ where
     }
 }
 
+impl From<NewNode> for NodeContent {
+    fn from(node: NewNode) -> Self {
+        match node {
+            NewNode::Shape(shape) => NodeContent::Shape(shape),
+            NewNode::Operation { operation, child } => NodeContent::Operation {
+                operation,
+                child: (*child).into(),
+            },
+            NewNode::Group { children } => NodeContent::Group {
+                new_children: Some(children.into_iter().map(Into::into).collect()),
+            },
+        }
+    }
+}
+
 /// Each group update's child.
 #[derive(Debug, Deserialize, Serialize)]
 pub enum ChildUpdate {
