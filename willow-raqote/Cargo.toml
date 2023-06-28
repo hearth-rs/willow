@@ -5,7 +5,10 @@ edition = { workspace = true }
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+allsorts = { version = "0.10", default-features = false, features = ["flate2_rust", "outline"] }
 euclid = "0.22"
+notosans = "0.1"
+ouroboros = "0.15"
 raqote = { workspace = true }
 stackblur-iter = { version = "0.2", features = ["blend-srgb"] }
 willow-server = { workspace = true }

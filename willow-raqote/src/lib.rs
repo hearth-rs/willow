@@ -22,11 +22,14 @@ use raqote::{
 use stackblur_iter::imgref::ImgRefMut;
 use willow_server::{Operation, Shape, WalkTree};
 
+mod text;
+
 pub struct RaqoteRenderer<'a, Backing> {
     dt: &'a mut DrawTarget<Backing>,
     blur_stack: Vec<DrawTarget>,
     stroke_stack: Vec<Source<'static>>,
     transform_stack: Vec<Transform>,
+    default_font: text::FontData,
 }
 
 impl<'a, Backing> WalkTree for RaqoteRenderer<'a, Backing>
@@ -65,6 +68,9 @@ where
             Rectangle { min, max } => {
                 let size = *max - *min;
                 dt.fill_rect(min.x, min.y, size.x, size.y, &source, &options);
+            }
+            Text { content, .. } => {
+                self.default_font.draw(&mut dt, content, &source, &options);
             }
         }
     }
@@ -144,6 +150,12 @@ impl<'a, Backing> RaqoteRenderer<'a, Backing> {
             blur_stack: Vec::new(),
             stroke_stack: vec![default_stroke],
             transform_stack: vec![Transform::identity()],
+            default_font: text::FontData::load(
+                allsorts::tag::LATN,
+                allsorts::glyph_position::TextDirection::LeftToRight,
+                false,
+                notosans::REGULAR_TTF.to_vec(),
+            ),
         }
     }
 }
