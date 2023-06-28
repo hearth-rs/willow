@@ -62,6 +62,22 @@ fn main() {
                 }
                 .into(),
             },
+            NewNode::Operation {
+                operation: Operation::Stroke(Stroke::Solid {
+                    color: Vec3A::new(0.0, 0.0, 1.0),
+                }),
+                child: NewNode::Operation {
+                    operation: Operation::Translate {
+                        offset: Vec2::new(60.0, 120.0),
+                    },
+                    child: NewNode::Shape(Shape::Text {
+                        content: "Lorem ipsum blah blah blah".to_string(),
+                        font: "unused".to_string(),
+                    })
+                    .into(),
+                }
+                .into(),
+            },
         ]
         .into(),
     })
