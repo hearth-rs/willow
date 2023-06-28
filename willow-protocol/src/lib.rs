@@ -158,6 +158,10 @@ pub enum Operation {
     /// Note that this is applied to all children of this operation AFTER they
     /// are drawn, and not independently for each child.
     Opacity { opacity: f32 },
+
+    /// Applies a Gaussian or Gaussian-like blur to the result of rendering
+    /// all children.
+    Blur { radius: f32 },
 }
 
 /// A stroke to apply to a [Operation::Stroke] operation.
