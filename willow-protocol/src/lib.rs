@@ -135,6 +135,15 @@ pub enum Shape {
 
     /// A rectangle with minimum and maximum bounds.
     Rectangle { min: Vec2, max: Vec2 },
+
+    /// A text string.
+    Text {
+        /// The content of the text.
+        content: String,
+
+        /// Application-specific font information.
+        font: String,
+    }
 }
 
 /// A shape tree node with one child that applies a graphical operation to that
