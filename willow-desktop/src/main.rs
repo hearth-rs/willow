@@ -33,18 +33,37 @@ fn main() {
     let mut tree = Tree::new();
     tree.update_node(NodeUpdate {
         target: 0,
-        content: NodeContent::Operation {
-            operation: Operation::Stroke(Stroke::Solid {
-                color: Vec3A::new(0.0, 0.0, 1.0),
-            }),
-            child: NewNode::Operation {
-                operation: Operation::Translate {
-                    offset: Vec2::new(60.0, 40.0),
-                },
-                child: NewNode::Shape(Shape::Circle { radius: 25.0 }).into(),
-            }
-            .into(),
-        },
+        content: vec![
+            NewNode::Operation {
+                operation: Operation::Stroke(Stroke::Solid {
+                    color: Vec3A::new(0.0, 0.0, 1.0),
+                }),
+                child: NewNode::Operation {
+                    operation: Operation::Translate {
+                        offset: Vec2::new(60.0, 40.0),
+                    },
+                    child: NewNode::Shape(Shape::Circle { radius: 25.0 }).into(),
+                }
+                .into(),
+            },
+            NewNode::Operation {
+                operation: Operation::Blur { radius: 5.0 },
+                child: NewNode::Operation {
+                    operation: Operation::Stroke(Stroke::Solid {
+                        color: Vec3A::new(0.0, 1.0, 0.0),
+                    }),
+                    child: NewNode::Operation {
+                        operation: Operation::Translate {
+                            offset: Vec2::new(60.0, 80.0),
+                        },
+                        child: NewNode::Shape(Shape::Circle { radius: 25.0 }).into(),
+                    }
+                    .into(),
+                }
+                .into(),
+            },
+        ]
+        .into(),
     })
     .unwrap();
 
