@@ -15,12 +15,16 @@
 
 use std::f32::consts::TAU;
 
-use euclid::Angle;
-use raqote::{DrawOptions, DrawTarget, PathBuilder, SolidSource, Source, Transform};
+use euclid::{Angle, Size2D};
+use raqote::{
+    DrawOptions, DrawTarget, IntPoint, IntRect, PathBuilder, SolidSource, Source, Transform,
+};
+use stackblur_iter::imgref::ImgRefMut;
 use willow_server::{Operation, Shape, WalkTree};
 
 pub struct RaqoteRenderer<'a, Backing> {
     dt: &'a mut DrawTarget<Backing>,
+    blur_stack: Vec<DrawTarget>,
     stroke_stack: Vec<Source<'static>>,
     transform_stack: Vec<Transform>,
 }
@@ -33,8 +37,18 @@ where
         let source = self.stroke_stack.last().unwrap();
         let options = DrawOptions::new();
 
+        let width = self.dt.width();
+        let height = self.dt.height();
+
+        let backing = match self.blur_stack.last_mut() {
+            Some(blurred) => blurred.get_data_mut(),
+            None => self.dt.get_data_mut(),
+        };
+
+        let mut dt = DrawTarget::from_backing(width, height, backing);
+
         let current_transform = self.transform_stack.last().unwrap().clone();
-        self.dt.set_transform(&current_transform);
+        dt.set_transform(&current_transform);
 
         use Shape::*;
         match shape {
@@ -46,12 +60,11 @@ where
 
                 let path = pb.finish();
 
-                self.dt.fill(&path, &source, &options);
+                dt.fill(&path, &source, &options);
             }
             Rectangle { min, max } => {
                 let size = *max - *min;
-                self.dt
-                    .fill_rect(min.x, min.y, size.x, size.y, &source, &options);
+                dt.fill_rect(min.x, min.y, size.x, size.y, &source, &options);
             }
         }
     }
@@ -82,9 +95,10 @@ where
                 let scale = Transform::scale(*scale, *scale);
                 self.transform_stack.push(current_transform.then(&scale));
             }
-            Opacity { opacity } => self
-                .dt
-                .push_layer_with_blend(*opacity, raqote::BlendMode::Src),
+            Opacity { opacity } => self.dt.push_layer(*opacity),
+            Blur { .. } => self
+                .blur_stack
+                .push(DrawTarget::new(self.dt.width(), self.dt.height())),
         }
     }
 
@@ -99,6 +113,19 @@ where
                 self.transform_stack.pop();
             }
             Opacity { .. } => self.dt.pop_layer(),
+            Blur { radius } => {
+                let mut blur_target = self.blur_stack.pop().unwrap();
+                let width = blur_target.width();
+                let height = blur_target.height();
+                let buffer = blur_target.get_data_mut();
+                let mut img = ImgRefMut::new(buffer, width as usize, height as usize);
+                stackblur_iter::blur_srgb(&mut img, *radius as usize);
+                let size = Size2D::new(width, height);
+                let src_rect = IntRect::from_size(size);
+                let dst = IntPoint::zero();
+                let blend = raqote::BlendMode::SrcOver;
+                self.dt.blend_surface(&blur_target, src_rect, dst, blend);
+            }
         }
     }
 }
@@ -114,6 +141,7 @@ impl<'a, Backing> RaqoteRenderer<'a, Backing> {
 
         Self {
             dt,
+            blur_stack: Vec::new(),
             stroke_stack: vec![default_stroke],
             transform_stack: vec![Transform::identity()],
         }

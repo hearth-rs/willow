@@ -7,4 +7,5 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 euclid = "0.22"
 raqote = { workspace = true }
+stackblur-iter = { version = "0.2", features = ["blend-srgb"] }
 willow-server = { workspace = true }
