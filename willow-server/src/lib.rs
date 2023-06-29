@@ -260,6 +260,7 @@ impl Tree {
                     children
                         .iter()
                         .map(|child| (*child, false))
+                        .rev() // stack pops in reverse order
                         .collect::<Vec<_>>()
                         .as_slice(),
                 ),
