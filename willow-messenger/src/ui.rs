@@ -13,6 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
+use chrono::{DateTime, Utc};
 use willow_server::{
     glam::{vec2, Vec2, Vec3A},
     ChildUpdate, NewNode, NodeContent, NodeUpdate, Operation, Shape, Stroke, Tree,
@@ -163,7 +164,7 @@ where
 pub struct MessageContent {
     pub text: String,
     pub sender: String,
-    pub timestamp: String,
+    pub timestamp: DateTime<Utc>,
 }
 
 pub struct Message {
@@ -187,37 +188,41 @@ impl ElementComponent for Message {
                 Operation::Translate {
                     offset: vec2(5.0, 15.0),
                 },
-                Element::operation(
-                    stroke_color(theme.muted),
-                    Shape::Text {
-                        content: self.content.timestamp.clone(),
-                        font: "unused".to_string(),
-                    },
-                ),
-            ),
-            Element::operation(
-                Operation::Translate {
-                    offset: vec2(55.0, 15.0),
-                },
-                Element::operation(
-                    stroke_color(theme.text),
-                    Shape::Text {
-                        content: self.content.sender.clone(),
-                        font: "unused".to_string(),
-                    },
-                ),
-            ),
-            Element::operation(
-                Operation::Translate {
-                    offset: vec2(95.0, 15.0),
-                },
-                Element::operation(
-                    stroke_color(theme.text),
-                    Shape::Text {
-                        content: self.content.text.clone(),
-                        font: "unused".to_string(),
-                    },
-                ),
+                vec![
+                    Element::operation(
+                        stroke_color(theme.muted),
+                        Shape::Text {
+                            content: self.content.timestamp.format("%d/%m/%Y %H:%M").to_string(),
+                            font: "unused".to_string(),
+                        },
+                    ),
+                    Element::operation(
+                        Operation::Translate {
+                            offset: vec2(100.0, 0.0),
+                        },
+                        vec![
+                            Element::operation(
+                                stroke_color(theme.text),
+                                Shape::Text {
+                                    content: self.content.sender.clone(),
+                                    font: "unused".to_string(),
+                                },
+                            ),
+                            Element::operation(
+                                Operation::Translate {
+                                    offset: vec2(100.0, 0.0),
+                                },
+                                Element::operation(
+                                    stroke_color(theme.text),
+                                    Shape::Text {
+                                        content: self.content.text.clone(),
+                                        font: "unused".to_string(),
+                                    },
+                                ),
+                            ),
+                        ],
+                    ),
+                ],
             ),
         ]
         .into()

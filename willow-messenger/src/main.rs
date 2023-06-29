@@ -104,7 +104,7 @@ fn main() {
                         .send_event(AppEvent::Message(MessageContent {
                             text: input.clone(),
                             sender: nick.clone(),
-                            timestamp: "Just now".to_string(),
+                            timestamp: chrono::Utc::now(),
                         }))
                         .unwrap();
 
@@ -154,7 +154,7 @@ pub fn run_connection(proxy: EventLoopProxy<AppEvent>, stream: Arc<TcpStream>) {
         let message = MessageContent {
             text: body,
             sender: from,
-            timestamp: "Just now".to_string(),
+            timestamp: chrono::Utc::now(),
         };
 
         proxy.send_event(AppEvent::Message(message)).unwrap();

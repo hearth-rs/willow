@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = "0.4"
 raqote = { workspace = true }
 slab = { workspace = true }
 softbuffer = "0.3"
