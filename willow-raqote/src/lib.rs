@@ -91,7 +91,7 @@ where
             },
             Translate { offset } => {
                 let translate = Transform::translation(offset.x, offset.y);
-                self.transform_stack.push(translate);
+                self.transform_stack.push(current_transform.then(&translate));
             }
             Rotation { angle } => {
                 let rotation = Transform::rotation(Angle { radians: *angle });
