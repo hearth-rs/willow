@@ -13,26 +13,39 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::num::NonZeroU32;
+use std::{
+    io::{BufRead, BufReader},
+    net::TcpStream,
+    num::NonZeroU32,
+};
 
 use raqote::DrawTarget;
 use ui::MessageContent;
 use winit::{
     event::{Event, WindowEvent},
-    event_loop::EventLoop,
+    event_loop::{EventLoopBuilder, EventLoopProxy},
     window::WindowBuilder,
 };
 
 mod ui;
 
+#[derive(Clone, Debug)]
+pub enum AppEvent {
+    Message(MessageContent),
+}
+
 fn main() {
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
     let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
 
+    let proxy = event_loop.create_proxy();
+    std::thread::spawn(move || run_connection(proxy));
+
     let mut state = ui::State::new();
 
+    let mut messages = Vec::new();
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(_) => {
             let (width, height) = {
@@ -48,23 +61,7 @@ fn main() {
                 .unwrap();
 
             state.set_root(ui::MessengerApp {
-                messages: vec![
-                    MessageContent {
-                        text: "Hello, world!".to_string(),
-                        sender: "Mars".into(),
-                        timestamp: "Just now".to_string(),
-                    },
-                    MessageContent {
-                        text: "hiiii".to_string(),
-                        sender: "Roux".into(),
-                        timestamp: "Just now".to_string(),
-                    },
-                    MessageContent {
-                        text: "awawawawawa".to_string(),
-                        sender: "Sasha".into(),
-                        timestamp: "Just now".to_string(),
-                    },
-                ],
+                messages: messages.clone(),
                 size: willow_server::glam::vec2(width as f32, height as f32),
             });
 
@@ -82,6 +79,38 @@ fn main() {
         } => {
             control_flow.set_exit();
         }
+        Event::UserEvent(event) => match event {
+            AppEvent::Message(message) => {
+                messages.push(message);
+                window.request_redraw();
+            }
+        },
         _ => {}
     });
+}
+
+pub fn run_connection(proxy: EventLoopProxy<AppEvent>) {
+    let stream = TcpStream::connect("127.0.0.1:8080").unwrap();
+
+    loop {
+        let mut reader = BufReader::new(&stream);
+        let mut from = String::new();
+        let mut body = String::new();
+        reader.read_line(&mut from).unwrap();
+        reader.read_line(&mut body).unwrap();
+
+        assert!(from.starts_with("FROM "));
+        assert!(body.starts_with("BODY "));
+
+        let from = from.split_off(5).trim().to_string();
+        let body = body.split_off(5).trim().to_string();
+
+        let message = MessageContent {
+            text: body,
+            sender: from,
+            timestamp: "Just now".to_string(),
+        };
+
+        proxy.send_event(AppEvent::Message(message)).unwrap();
+    }
 }
