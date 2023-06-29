@@ -118,8 +118,10 @@ pub fn stroke_color(color: Color) -> Operation {
 pub struct Theme {
     pub base: Color,
     pub surface: Color,
+    pub overlay: Color,
     pub text: Color,
     pub muted: Color,
+    pub accent: Color,
 }
 
 pub struct Hooks {}
@@ -136,8 +138,10 @@ impl Hooks {
         Theme {
             base: rgb(0x191724),
             surface: rgb(0x1f1d2e),
+            overlay: rgb(0x26233a),
             text: rgb(0xe0def4),
             muted: rgb(0x6e6a86),
+            accent: rgb(0x31748f),
         }
     }
 }
@@ -266,8 +270,66 @@ impl ElementComponent for Chat {
     }
 }
 
+pub struct TextPrompt {
+    pub content: String,
+    pub width: f32,
+}
+
+impl ElementComponent for TextPrompt {
+    fn render(&mut self, hooks: &mut Hooks) -> Element {
+        let theme = hooks.use_theme();
+        let padding = Vec2::splat(5.0);
+        let border = 1.0;
+        let height = Self::HEIGHT;
+        let size = Vec2::new(self.width, height);
+        let text_anchor = Vec2::splat(10.0);
+
+        vec![
+            Element::operation(
+                stroke_color(theme.surface),
+                Shape::Rectangle {
+                    min: Vec2::new(0.0, 0.0),
+                    max: size,
+                },
+            ),
+            Element::operation(
+                stroke_color(theme.accent),
+                Shape::Rectangle {
+                    min: padding,
+                    max: size - padding,
+                },
+            ),
+            Element::operation(
+                stroke_color(theme.overlay),
+                Shape::Rectangle {
+                    min: padding + border,
+                    max: size - padding - border,
+                },
+            ),
+            Element::operation(
+                Operation::Translate {
+                    offset: Vec2::new(0.0, height)+ (-padding - border - text_anchor) * Vec2::new(-1.0, 1.0),
+                },
+                Element::operation(
+                    stroke_color(theme.text),
+                    Shape::Text {
+                        content: self.content.clone(),
+                        font: "unused".to_string(),
+                    },
+                ),
+            ),
+        ]
+        .into()
+    }
+}
+
+impl TextPrompt {
+    pub const HEIGHT: f32 = 40.0;
+}
+
 pub struct MessengerApp {
     pub messages: Vec<MessageContent>,
+    pub input: String,
     pub size: Vec2,
 }
 
@@ -275,12 +337,18 @@ impl ElementComponent for MessengerApp {
     fn render(&mut self, hooks: &mut Hooks) -> Element {
         Element::operation(
             Operation::Translate {
-                offset: Vec2::new(0.0, self.size.y),
+                offset: Vec2::new(0.0, self.size.y - TextPrompt::HEIGHT),
             },
-            Chat {
-                messages: self.messages.clone(),
-                width: self.size.x,
-            },
+            vec![
+                Element::from(Chat {
+                    messages: self.messages.clone(),
+                    width: self.size.x,
+                }),
+                Element::from(TextPrompt {
+                    content: self.input.clone(),
+                    width: self.size.x,
+                }),
+            ],
         )
     }
 }

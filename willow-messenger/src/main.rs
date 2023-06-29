@@ -14,9 +14,10 @@
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
 use std::{
-    io::{BufRead, BufReader},
+    io::{BufRead, BufReader, Write},
     net::TcpStream,
     num::NonZeroU32,
+    sync::Arc,
 };
 
 use raqote::DrawTarget;
@@ -35,17 +36,32 @@ pub enum AppEvent {
 }
 
 fn main() {
+    let mut args = std::env::args();
+    args.next().expect("expected argv[0]");
+    let server = args.next().expect("expected server address");
+    let nick = args.next().expect("expected nickname");
+
     let event_loop = EventLoopBuilder::<AppEvent>::with_user_event().build();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let context = unsafe { softbuffer::Context::new(&window) }.unwrap();
     let mut surface = unsafe { softbuffer::Surface::new(&context, &window) }.unwrap();
 
+    let mut stream = TcpStream::connect(server).unwrap();
+    stream
+        .write_all(format!("FROM {}\n", nick).as_bytes())
+        .unwrap();
+
+    let stream = Arc::new(stream);
     let proxy = event_loop.create_proxy();
-    std::thread::spawn(move || run_connection(proxy));
+    std::thread::spawn({
+        let stream = stream.clone();
+        move || run_connection(proxy, stream.clone())
+    });
 
     let mut state = ui::State::new();
-
     let mut messages = Vec::new();
+    let mut input = String::new();
+    let proxy = event_loop.create_proxy();
     event_loop.run(move |event, _, control_flow| match event {
         Event::RedrawRequested(_) => {
             let (width, height) = {
@@ -63,6 +79,7 @@ fn main() {
             state.set_root(ui::MessengerApp {
                 messages: messages.clone(),
                 size: willow_server::glam::vec2(width as f32, height as f32),
+                input: input.clone(),
             });
 
             let mut buffer = surface.buffer_mut().unwrap();
@@ -72,6 +89,36 @@ fn main() {
             state.tree.walk(&mut ren);
 
             buffer.present().unwrap();
+        }
+        Event::WindowEvent {
+            event: WindowEvent::ReceivedCharacter(char),
+            ..
+        } => {
+            match char {
+                '\r' => {
+                    let message = format!("BODY {}\n", input);
+                    stream.as_ref().write_all(message.as_bytes()).unwrap();
+                    stream.as_ref().flush().unwrap();
+
+                    proxy
+                        .send_event(AppEvent::Message(MessageContent {
+                            text: input.clone(),
+                            sender: nick.clone(),
+                            timestamp: "Just now".to_string(),
+                        }))
+                        .unwrap();
+
+                    input.clear();
+                }
+                '\u{8}' => {
+                    input.pop();
+                }
+                char => {
+                    input.push(char);
+                }
+            }
+
+            window.request_redraw();
         }
         Event::WindowEvent {
             event: WindowEvent::CloseRequested,
@@ -89,11 +136,10 @@ fn main() {
     });
 }
 
-pub fn run_connection(proxy: EventLoopProxy<AppEvent>) {
-    let stream = TcpStream::connect("127.0.0.1:8080").unwrap();
+pub fn run_connection(proxy: EventLoopProxy<AppEvent>, stream: Arc<TcpStream>) {
+    let mut reader = BufReader::new(stream.as_ref());
 
     loop {
-        let mut reader = BufReader::new(&stream);
         let mut from = String::new();
         let mut body = String::new();
         reader.read_line(&mut from).unwrap();
