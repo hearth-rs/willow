@@ -14,7 +14,7 @@
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
 use willow_server::{
-    glam::{vec2, Vec2, Vec3A, Vec4},
+    glam::{vec2, Vec2, Vec3A},
     ChildUpdate, NewNode, NodeContent, NodeUpdate, Operation, Shape, Stroke, Tree,
 };
 
@@ -231,8 +231,6 @@ pub struct Chat {
 
 impl ElementComponent for Chat {
     fn render(&mut self, hooks: &mut Hooks) -> Element {
-        let theme = hooks.use_theme();
-
         let outer_padding = Vec2::splat(10.0);
         let inner_padding = 5.0;
         let message_width = self.width - outer_padding.x * 2.0;
@@ -256,16 +254,7 @@ impl ElementComponent for Chat {
             Operation::Translate {
                 offset: Vec2::new(0.0, -used_height),
             },
-            vec![Element::operation(
-                stroke_color(theme.base),
-                Shape::Rectangle {
-                    min: Vec2::ZERO,
-                    max: Vec2::new(self.width, used_height),
-                },
-            )]
-            .into_iter()
-            .chain(messages)
-            .collect::<Vec<Element>>(),
+            messages,
         )
     }
 }
@@ -308,7 +297,8 @@ impl ElementComponent for TextPrompt {
             ),
             Element::operation(
                 Operation::Translate {
-                    offset: Vec2::new(0.0, height)+ (-padding - border - text_anchor) * Vec2::new(-1.0, 1.0),
+                    offset: Vec2::new(0.0, height)
+                        + (-padding - border - text_anchor) * Vec2::new(-1.0, 1.0),
                 },
                 Element::operation(
                     stroke_color(theme.text),
@@ -335,20 +325,32 @@ pub struct MessengerApp {
 
 impl ElementComponent for MessengerApp {
     fn render(&mut self, hooks: &mut Hooks) -> Element {
-        Element::operation(
-            Operation::Translate {
-                offset: Vec2::new(0.0, self.size.y - TextPrompt::HEIGHT),
-            },
-            vec![
-                Element::from(Chat {
-                    messages: self.messages.clone(),
-                    width: self.size.x,
-                }),
-                Element::from(TextPrompt {
-                    content: self.input.clone(),
-                    width: self.size.x,
-                }),
-            ],
-        )
+        let theme = hooks.use_theme();
+
+        vec![
+            Element::operation(
+                stroke_color(theme.base),
+                Shape::Rectangle {
+                    min: Vec2::ZERO,
+                    max: Vec2::new(self.size.x, self.size.y - TextPrompt::HEIGHT),
+                },
+            ),
+            Element::operation(
+                Operation::Translate {
+                    offset: Vec2::new(0.0, self.size.y - TextPrompt::HEIGHT),
+                },
+                vec![
+                    Element::from(Chat {
+                        messages: self.messages.clone(),
+                        width: self.size.x,
+                    }),
+                    Element::from(TextPrompt {
+                        content: self.input.clone(),
+                        width: self.size.x,
+                    }),
+                ],
+            ),
+        ]
+        .into()
     }
 }
