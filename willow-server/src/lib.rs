@@ -15,8 +15,10 @@
 
 use std::fmt::Formatter;
 
+use glam::Vec2;
 use slab::Slab;
 
+use willow_protocol::glam::{vec2, Mat2, Mat3};
 pub use willow_protocol::*;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -48,6 +50,42 @@ impl std::fmt::Display for NodeUpdateError {
 
 pub type NodeUpdateResult<T> = Result<T, NodeUpdateError>;
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Aabb {
+    pub min: Vec2,
+    pub max: Vec2,
+}
+
+impl Aabb {
+    pub const INVALID: Self = Self {
+        min: Vec2::INFINITY,
+        max: Vec2::NEG_INFINITY,
+    };
+
+    pub fn union(&self, other: &Self) -> Self {
+        Self {
+            min: self.min.min(other.min),
+            max: self.max.max(other.max),
+        }
+    }
+
+    pub fn is_intersecting(&self, other: &Self) -> bool {
+        self.min.x < other.max.x
+            && self.max.x > other.min.x
+            && self.min.y < other.max.y
+            && self.max.y > other.min.y
+    }
+
+    pub fn corners(&self) -> [Vec2; 4] {
+        [
+            self.min,
+            vec2(self.min.x, self.max.y),
+            vec2(self.max.x, self.min.y),
+            self.max,
+        ]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum NodeKind {
     Shape(Shape),
@@ -65,14 +103,18 @@ pub struct Node {
 
     /// Whether this value has been reused by the target node during an update.
     reused: bool,
+
+    /// The bounding box of this node and its children.
+    aabb: Aabb,
 }
 
 impl Node {
-    pub fn new(kind: NodeKind) -> Self {
+    pub fn new(kind: NodeKind, aabb: Aabb) -> Self {
         Self {
             kind,
             owned: false,
             reused: false,
+            aabb,
         }
     }
 
@@ -91,7 +133,7 @@ impl Tree {
     pub fn new() -> Self {
         let mut nodes = Slab::new();
         let empty = NodeKind::Shape(Shape::Empty);
-        nodes.insert(Node::new(empty));
+        nodes.insert(Node::new(empty, Aabb::default()));
 
         Self { nodes }
     }
@@ -134,8 +176,9 @@ impl Tree {
             }
         };
 
+        let new_node = self.create_new_node(node_kind);
         let node = self.nodes.get_mut(update.target as usize).unwrap();
-        let _ = std::mem::replace(node, Node::new(node_kind));
+        let _ = std::mem::replace(node, new_node);
 
         Ok(NodeUpdateResponse { new_nodes })
     }
@@ -211,19 +254,11 @@ impl Tree {
     /// node and its children to the given buffer. Returns the ID of the new
     /// node.
     pub fn add_new_node(&mut self, new_indices: &mut Vec<u32>, node: NewNode) -> u32 {
-        match node {
-            NewNode::Shape(shape) => {
-                let node = Node::new(NodeKind::Shape(shape));
-                let index = self.nodes.insert(node) as u32;
-                new_indices.push(index);
-                index
-            }
+        let kind = match node {
+            NewNode::Shape(shape) => NodeKind::Shape(shape),
             NewNode::Operation { operation, child } => {
                 let child = self.add_new_node(new_indices, *child) as usize;
-                let op_node = Node::new(NodeKind::Operation { operation, child });
-                let index = self.nodes.insert(op_node) as u32;
-                new_indices.push(index);
-                index
+                NodeKind::Operation { operation, child }
             }
             NewNode::Group { children } => {
                 let children: Vec<usize> = children
@@ -231,39 +266,154 @@ impl Tree {
                     .map(|child| self.add_new_node(new_indices, child) as usize)
                     .collect();
 
-                let group_node = Node::new(NodeKind::Group(children));
-                let index = self.nodes.insert(group_node) as u32;
-                new_indices.push(index);
-                index
+                NodeKind::Group(children)
             }
-        }
+        };
+
+        let node = self.create_new_node(kind);
+        let index = self.nodes.insert(node) as u32;
+        new_indices.push(index);
+        index
+    }
+
+    /// Creates a [Node] of the given kind.
+    pub fn create_new_node(&mut self, kind: NodeKind) -> Node {
+        let aabb = match &kind {
+            NodeKind::Shape(shape) => match shape.clone() {
+                Shape::Empty => Aabb::INVALID,
+                Shape::Circle { radius } => Aabb {
+                    min: -Vec2::splat(radius),
+                    max: Vec2::splat(radius),
+                },
+                Shape::Rectangle { min, max } => Aabb { min, max },
+                Shape::Text { content, .. } => Aabb {
+                    // TODO server-side shaping
+                    min: Vec2::new(-5.0, -10.0),
+                    max: Vec2::new(content.len() as f32 * 10.0, 5.0),
+                },
+            },
+            NodeKind::Operation { operation, child } => {
+                let child_aabb = self.nodes[*child].aabb.clone();
+
+                match operation {
+                    Operation::Translate { offset } => Aabb {
+                        min: child_aabb.min + *offset,
+                        max: child_aabb.max + *offset,
+                    },
+                    Operation::Rotation { angle } => {
+                        let corners = child_aabb.corners();
+
+                        let mat = Mat2::from_angle(*angle);
+                        let mut min = Vec2::INFINITY;
+                        let mut max = Vec2::NEG_INFINITY;
+
+                        for corner in corners {
+                            let corner = mat * corner;
+                            min = min.min(corner);
+                            max = max.max(corner);
+                        }
+
+                        Aabb { min, max }
+                    }
+                    Operation::Scale { scale } => Aabb {
+                        min: child_aabb.min * *scale,
+                        max: child_aabb.max * *scale,
+                    },
+                    Operation::Blur { radius } => Aabb {
+                        min: child_aabb.min - *radius,
+                        max: child_aabb.max + *radius,
+                    },
+                    _ => child_aabb,
+                }
+            }
+            NodeKind::Group(children) => {
+                let mut aabb = Aabb::INVALID;
+                for child in children.iter() {
+                    let child_aabb = &self.nodes[*child].aabb;
+                    aabb = aabb.union(child_aabb);
+                }
+
+                aabb
+            }
+        };
+
+        Node::new(kind, aabb)
     }
 
     /// Walks the entire tree using a type implementing [WalkTree].
-    pub fn walk(&mut self, walker: &mut impl WalkTree) {
+    pub fn walk(&mut self, walker: &mut impl WalkTree, aabb: &Aabb) {
         let mut stack = Vec::new();
-        stack.push((0, false));
+        let mut transforms = vec![Mat3::default()];
+        stack.push((0, true));
 
-        while let Some((index, pop)) = stack.pop() {
-            match &self.nodes.get(index).unwrap().kind {
-                NodeKind::Shape(shape) => walker.on_shape(shape),
+        while let Some((index, ascending)) = stack.pop() {
+            let node = self.nodes.get(index).unwrap();
+            let current_transform = transforms.last().unwrap().clone();
+
+            if ascending {
+                let corners = node.aabb.corners();
+
+                let mut min = Vec2::INFINITY;
+                let mut max = Vec2::NEG_INFINITY;
+
+                for corner in corners {
+                    let corner = current_transform.transform_point2(corner);
+                    min = min.min(corner);
+                    max = max.max(corner);
+                }
+
+                let child_aabb = Aabb { min, max };
+                if !aabb.is_intersecting(&child_aabb) {
+                    continue;
+                }
+
+                // walker.on_aabb(&node.aabb);
+            }
+
+            match &node.kind {
+                NodeKind::Shape(shape) if ascending => walker.on_shape(shape),
                 NodeKind::Operation { operation, child } => {
-                    if pop {
-                        walker.pop_operation(operation);
-                    } else {
+                    if ascending {
                         walker.push_operation(operation);
-                        stack.push((index, true));
-                        stack.push((*child, false));
+                        stack.push((index, false));
+                        stack.push((*child, true));
+
+                        let new_transform = match operation {
+                            Operation::Translate { offset } => {
+                                Some(Mat3::from_translation(*offset))
+                            }
+                            Operation::Rotation { angle } => Some(Mat3::from_rotation_z(*angle)),
+                            Operation::Scale { scale } => {
+                                Some(Mat3::from_scale(Vec2::splat(*scale)))
+                            }
+                            _ => None,
+                        };
+
+                        if let Some(new_transform) = new_transform {
+                            transforms.push(current_transform * new_transform);
+                        }
+                    } else {
+                        walker.pop_operation(operation);
+
+                        match operation {
+                            Operation::Translate { .. }
+                            | Operation::Rotation { .. }
+                            | Operation::Scale { .. } => {
+                                transforms.pop();
+                            }
+                            _ => {}
+                        }
                     }
                 }
-                NodeKind::Group(children) => stack.extend_from_slice(
+                NodeKind::Group(children) if ascending => stack.extend_from_slice(
                     children
                         .iter()
-                        .map(|child| (*child, false))
+                        .map(|child| (*child, true))
                         .rev() // stack pops in reverse order
                         .collect::<Vec<_>>()
                         .as_slice(),
                 ),
+                _ => {}
             }
         }
     }
@@ -275,6 +425,8 @@ pub trait WalkTree {
     fn push_operation(&mut self, operation: &Operation);
 
     fn pop_operation(&mut self, operation: &Operation);
+
+    fn on_aabb(&mut self, aabb: &Aabb);
 }
 
 #[cfg(test)]
