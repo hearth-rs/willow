@@ -82,11 +82,16 @@ fn main() {
                 input: input.clone(),
             });
 
+            let aabb = willow_server::Aabb {
+                min: willow_server::glam::Vec2::ZERO,
+                max: willow_server::glam::vec2(width as f32, height as f32),
+            };
+
             let mut buffer = surface.buffer_mut().unwrap();
             buffer.fill(0xff000000);
             let mut dt = DrawTarget::from_backing(width as i32, height as i32, buffer.as_mut());
             let mut ren = willow_raqote::RaqoteRenderer::new(&mut dt);
-            state.tree.walk(&mut ren);
+            state.tree.walk(&mut ren, &aabb);
 
             buffer.present().unwrap();
         }
