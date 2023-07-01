@@ -16,11 +16,9 @@
 use std::f32::consts::TAU;
 
 use euclid::{Angle, Size2D};
-use raqote::{
-    DrawOptions, DrawTarget, IntPoint, IntRect, PathBuilder, SolidSource, Source, Transform,
-};
+use raqote::*;
 use stackblur_iter::imgref::ImgRefMut;
-use willow_server::{Operation, Shape, WalkTree};
+use willow_server::{Aabb, Operation, Shape, WalkTree};
 
 mod text;
 
@@ -91,7 +89,8 @@ where
             },
             Translate { offset } => {
                 let translate = Transform::translation(offset.x, offset.y);
-                self.transform_stack.push(current_transform.then(&translate));
+                self.transform_stack
+                    .push(current_transform.then(&translate));
             }
             Rotation { angle } => {
                 let rotation = Transform::rotation(Angle { radians: *angle });
@@ -133,6 +132,35 @@ where
                 self.dt.blend_surface(&blur_target, src_rect, dst, blend);
             }
         }
+    }
+
+    fn on_aabb(&mut self, aabb: &Aabb) {
+        let source = Source::Solid(SolidSource {
+            r: 0xff,
+            g: 0x00,
+            b: 0x00,
+            a: 0xff,
+        });
+
+        let style = StrokeStyle {
+            width: 1.0,
+            cap: raqote::LineCap::Square,
+            join: raqote::LineJoin::Bevel,
+            miter_limit: 1.0,
+            dash_array: vec![],
+            dash_offset: 0.0,
+        };
+
+        let options = DrawOptions::default();
+        let size = aabb.max - aabb.min;
+
+        let mut pb = PathBuilder::new();
+        pb.rect(aabb.min.x, aabb.min.y, size.x, size.y);
+        let path = pb.finish();
+
+        let current_transform = self.transform_stack.last().unwrap().clone();
+        self.dt.set_transform(&current_transform);
+        self.dt.stroke(&path, &source, &style, &options);
     }
 }
 
