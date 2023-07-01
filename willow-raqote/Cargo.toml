@@ -8,7 +8,7 @@ license = "AGPL-3.0-or-later"
 allsorts = { version = "0.10", default-features = false, features = ["flate2_rust", "outline"] }
 euclid = "0.22"
 notosans = "0.1"
-ouroboros = "0.15"
+ouroboros = "0.16"
 raqote = { workspace = true }
 stackblur-iter = { version = "0.2", features = ["blend-srgb"] }
 willow-server = { workspace = true }
