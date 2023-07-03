@@ -1,13 +1,15 @@
 [package]
 name = "willow-messenger"
-version = "0.1.0"
-edition = "2021"
+version = { workspace = true }
+edition = { workspace = true }
+license = "AGPL-3.0-or-later"
 
 [dependencies]
 chrono = "0.4"
 raqote = { workspace = true }
 slab = { workspace = true }
 softbuffer = "0.3"
+willow-react = { workspace = true }
 willow-server = { workspace = true }
 willow-raqote = { workspace = true }
 winit = "0.28"

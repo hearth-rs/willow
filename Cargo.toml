@@ -4,6 +4,7 @@ members = [
   "willow-messenger",
   "willow-protocol",
   "willow-raqote",
+  "willow-react",
   "willow-server",
 ]
 
@@ -17,4 +18,5 @@ raqote = { version = "0.8.2", default-features = false }
 slab = "0.4"
 willow-protocol = { path = "willow-protocol" }
 willow-raqote = { path = "willow-raqote" }
+willow-react = { path = "willow-react" }
 willow-server = { path = "willow-server" }

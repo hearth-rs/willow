@@ -58,7 +58,7 @@ fn main() {
         move || run_connection(proxy, stream.clone())
     });
 
-    let mut state = ui::State::new();
+    let mut state = willow_react::State::new();
     let mut messages = Vec::new();
     let mut input = String::new();
     let proxy = event_loop.create_proxy();
