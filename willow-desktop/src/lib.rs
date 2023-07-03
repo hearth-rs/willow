@@ -16,8 +16,11 @@
 use std::num::NonZeroU32;
 
 use raqote::DrawTarget;
-use willow_react::ElementComponent;
-use willow_server::glam::Vec2;
+use willow_react::{Element, ElementComponent, Hooks};
+use willow_server::{
+    glam::{vec2, Vec2},
+    Operation,
+};
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{EventLoopBuilder, EventLoopProxy},
@@ -34,6 +37,23 @@ pub trait App: 'static {
     fn on_event(&mut self, event: Self::Event);
 
     fn on_window_event(&mut self, event: WindowEvent);
+}
+
+struct ScalingElement {
+    scale: f32,
+    inner: Option<Box<dyn ElementComponent + 'static>>,
+}
+
+impl ElementComponent for ScalingElement {
+    fn render(&mut self, _hooks: &mut Hooks) -> Element {
+        Element::Operation {
+            operation: Operation::Scale { scale: self.scale },
+            child: Element::Component {
+                component: self.inner.take().unwrap(),
+            }
+            .into(),
+        }
+    }
 }
 
 pub fn run_app<T: App>(mut app: T) -> ! {
@@ -61,9 +81,11 @@ pub fn run_app<T: App>(mut app: T) -> ! {
                 )
                 .unwrap();
 
-            let size = willow_server::glam::vec2(width as f32, height as f32);
-            let root = app.redraw(size);
-            state.set_root(root);
+            let scale = window.scale_factor() as f32;
+            let size = vec2(width as f32, height as f32) / scale;
+            let inner = Some(app.redraw(size));
+            let el = ScalingElement { scale, inner };
+            state.set_root(Box::new(el));
 
             let aabb = willow_server::Aabb {
                 min: willow_server::glam::Vec2::ZERO,
