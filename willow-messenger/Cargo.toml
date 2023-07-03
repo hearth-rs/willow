@@ -9,6 +9,7 @@ chrono = "0.4"
 raqote = { workspace = true }
 slab = { workspace = true }
 softbuffer = "0.3"
+willow-desktop = { workspace = true }
 willow-react = { workspace = true }
 willow-server = { workspace = true }
 willow-raqote = { workspace = true }

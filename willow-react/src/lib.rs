@@ -25,7 +25,7 @@ impl State {
         Self { tree: Tree::new() }
     }
 
-    pub fn set_root(&mut self, mut component: impl ElementComponent) {
+    pub fn set_root(&mut self, mut component: Box<dyn ElementComponent>) {
         let mut hooks = Hooks {};
         let rendered = component.render(&mut hooks).render_whole(&mut hooks);
 
