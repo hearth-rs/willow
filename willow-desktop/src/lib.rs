@@ -82,8 +82,8 @@ pub fn run_app<T: App>(mut app: T) -> ! {
                 .unwrap();
 
             let scale = window.scale_factor() as f32;
-            let size = vec2(width as f32, height as f32) / scale;
-            let inner = Some(app.redraw(size));
+            let size = vec2(width as f32, height as f32);
+            let inner = Some(app.redraw(size / scale));
             let el = ScalingElement { scale, inner };
             state.set_root(Box::new(el));
 
