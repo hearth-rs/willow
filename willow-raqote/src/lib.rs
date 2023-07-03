@@ -90,15 +90,15 @@ where
             Translate { offset } => {
                 let translate = Transform::translation(offset.x, offset.y);
                 self.transform_stack
-                    .push(current_transform.then(&translate));
+                    .push(translate.then(&current_transform));
             }
             Rotation { angle } => {
                 let rotation = Transform::rotation(Angle { radians: *angle });
-                self.transform_stack.push(current_transform.then(&rotation));
+                self.transform_stack.push(rotation.then(&current_transform));
             }
             Scale { scale } => {
                 let scale = Transform::scale(*scale, *scale);
-                self.transform_stack.push(current_transform.then(&scale));
+                self.transform_stack.push(scale.then(&current_transform));
             }
             Opacity { opacity } => self.dt.push_layer(*opacity),
             Blur { .. } => self
