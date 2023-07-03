@@ -84,8 +84,14 @@ pub fn run_app<T: App>(mut app: T) -> ! {
         } => {
             control_flow.set_exit();
         }
-        Event::WindowEvent { event, .. } => app.on_window_event(event),
-        Event::UserEvent(event) => app.on_event(event),
+        Event::WindowEvent { event, .. } => {
+            app.on_window_event(event);
+            window.request_redraw();
+        }
+        Event::UserEvent(event) => {
+            app.on_event(event);
+            window.request_redraw();
+        }
         _ => {}
     });
 }
