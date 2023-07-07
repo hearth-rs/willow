@@ -18,7 +18,7 @@ use std::f32::consts::TAU;
 use euclid::{Angle, Size2D};
 use raqote::*;
 use stackblur_iter::imgref::ImgRefMut;
-use willow_server::{Aabb, Operation, Shape, WalkTree};
+use willow_server::{glam::Vec2, Aabb, Operation, Shape, WalkTree};
 
 mod text;
 
@@ -66,6 +66,55 @@ where
             Rectangle { min, max } => {
                 let size = *max - *min;
                 dt.fill_rect(min.x, min.y, size.x, size.y, &source, &options);
+            }
+            RoundedRectangle { min, max, radii } => {
+                let aabb = Aabb {
+                    min: *min,
+                    max: *max,
+                };
+
+                let get_offsets = |corner_idx| match corner_idx {
+                    0 => (Vec2::Y, Vec2::X),
+                    1 => (-Vec2::X, Vec2::Y),
+                    2 => (-Vec2::Y, -Vec2::X),
+                    3 => (Vec2::X, -Vec2::Y),
+                    _ => unreachable!(),
+                };
+
+                let mut pb = PathBuilder::new();
+
+                let first_corner = *min + get_offsets(3).1 * radii.x;
+                pb.move_to(first_corner.x, first_corner.y);
+
+                // approximate quarter circle control point offset
+                let control_offset = 0.446;
+
+                let corners = aabb.corners();
+                for (idx, corner) in corners.iter().copied().enumerate() {
+                    let (loff, roff) = get_offsets(idx);
+
+                    let radius = match idx {
+                        0 => radii.x,
+                        1 => radii.y,
+                        2 => radii.z,
+                        3 => radii.w,
+                        _ => unreachable!(),
+                    };
+
+                    let control_offset = control_offset * radius;
+                    let start = corner + loff * radius;
+                    let c1 = corner + loff * control_offset;
+                    let c2 = corner + roff * control_offset;
+                    let pt = corner + roff * radius;
+
+                    pb.line_to(start.x, start.y);
+                    pb.cubic_to(c1.x, c1.y, c2.x, c2.y, pt.x, pt.y);
+                }
+
+                pb.close();
+
+                let path = pb.finish();
+                dt.fill(&path, &source, &options);
             }
             Text { content, .. } => {
                 self.default_font.draw(&mut dt, content, &source, &options);
