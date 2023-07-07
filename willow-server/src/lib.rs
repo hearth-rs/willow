@@ -79,9 +79,9 @@ impl Aabb {
     pub fn corners(&self) -> [Vec2; 4] {
         [
             self.min,
-            vec2(self.min.x, self.max.y),
             vec2(self.max.x, self.min.y),
             self.max,
+            vec2(self.min.x, self.max.y),
         ]
     }
 }
@@ -286,6 +286,7 @@ impl Tree {
                     max: Vec2::splat(radius),
                 },
                 Shape::Rectangle { min, max } => Aabb { min, max },
+                Shape::RoundedRectangle { min, max, .. } => Aabb { min, max },
                 Shape::Text { content, .. } => Aabb {
                     // TODO server-side shaping
                     min: Vec2::new(-5.0, -10.0),
