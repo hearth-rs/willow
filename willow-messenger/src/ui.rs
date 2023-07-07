@@ -14,7 +14,7 @@
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
 use chrono::{DateTime, Utc};
-use glam::{Vec2, vec2};
+use glam::{vec2, Vec2, Vec4};
 use willow_react::{stroke_color, Element, ElementComponent, Hooks};
 use willow_server::*;
 
@@ -37,9 +37,10 @@ impl ElementComponent for Message {
         vec![
             Element::operation(
                 stroke_color(theme.surface),
-                Shape::Rectangle {
+                Shape::RoundedRectangle {
                     min: Vec2::ZERO,
                     max: self.size,
+                    radii: Vec4::splat(5.0),
                 },
             ),
             Element::operation(
