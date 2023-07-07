@@ -16,6 +16,8 @@
 use willow_server::*;
 use glam::Vec3A;
 
+pub use willow_server;
+
 pub struct State {
     pub tree: Tree,
 }

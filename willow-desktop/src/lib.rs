@@ -27,6 +27,8 @@ use winit::{
     window::WindowBuilder,
 };
 
+pub use willow_react;
+
 pub trait App: 'static {
     type Event;
 
