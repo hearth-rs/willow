@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with Willow.  If not, see <https://www.gnu.org/licenses/>.
 
-use glam::{Vec2, Vec3A};
+use glam::{Vec2, Vec3A, Vec4};
 use serde::{Deserialize, Serialize};
 
 pub use glam;
@@ -135,6 +135,11 @@ pub enum Shape {
 
     /// A rectangle with minimum and maximum bounds.
     Rectangle { min: Vec2, max: Vec2 },
+
+    /// A rectangle with rounded corners.
+    ///
+    /// The radii are ordered clockwise from the top-left corner.
+    RoundedRectangle { min: Vec2, max: Vec2, radii: Vec4 },
 
     /// A text string.
     Text {
